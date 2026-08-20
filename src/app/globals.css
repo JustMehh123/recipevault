@@ -1,0 +1,127 @@
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+:root {
+  --background: #f7f6f2;
+  --foreground: #1c1917;
+  --card: #ffffff;
+  --card-foreground: #1c1917;
+  --muted: #f0ede6;
+  --muted-foreground: #6b6154;
+  --border: #e4dfd4;
+  --primary: #b5541a;
+  --primary-foreground: #fff8f0;
+  --accent: #2f6b4f;
+  --accent-foreground: #ffffff;
+  --ring: #b5541a;
+}
+
+.dark {
+  --background: #161311;
+  --foreground: #f2ede5;
+  --card: #1f1b17;
+  --card-foreground: #f2ede5;
+  --muted: #262019;
+  --muted-foreground: #b3a996;
+  --border: #332c24;
+  --primary: #e08641;
+  --primary-foreground: #201202;
+  --accent: #4f9c76;
+  --accent-foreground: #08150f;
+  --ring: #e08641;
+}
+
+* {
+  border-color: var(--border);
+}
+
+html {
+  color-scheme: light;
+}
+
+html.dark {
+  color-scheme: dark;
+}
+
+html,
+body {
+  min-height: 100%;
+  min-height: 100dvh;
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  -webkit-tap-highlight-color: transparent;
+}
+
+@media (display-mode: standalone) {
+  /* Installed PWA: fill the screen, including iOS safe areas. */
+  body {
+    min-height: 100dvh;
+  }
+}
+
+::selection {
+  background-color: var(--primary);
+  color: var(--primary-foreground);
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background-color: var(--border);
+  border-radius: 9999px;
+}
+
+.drag-over {
+  outline: 2px dashed var(--primary);
+  outline-offset: -2px;
+  background-color: color-mix(in srgb, var(--primary) 10%, transparent);
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.25s ease-out;
+}
+
+@media print {
+  nav,
+  header,
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+  main,
+  .print-area {
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+  a[href]::after {
+    content: none !important;
+  }
+}
