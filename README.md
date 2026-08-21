@@ -146,8 +146,21 @@ by the health check.
    the health check — e.g. a free [Neon](https://neon.tech) or [Supabase](https://supabase.com)
    database). RecipeVault's recipe/planner/grocery data does **not** use this database.
 5. Deploy. Since all app data lives in the visitor's browser, no further configuration is needed.
-6. Open the live HTTPS URL on your phone and use **Add to Home Screen** / **Install app**. PWAs
-   require HTTPS (Vercel provides this automatically).
+6. If you use a custom domain (Duck DNS, etc.), add that domain in the Vercel project **Domains**
+   settings and set `NEXT_PUBLIC_SITE_URL` to the public HTTPS URL, e.g.
+   `https://recipevault.duckdns.org`. Icons and the web manifest use this as their base.
+7. Open the live **HTTPS** URL on your phone and use **Add to Home Screen** / **Install app**.
+   After deploying icon changes, delete the old home-screen icon and add it again — iOS caches
+   the first icon it saw and will not refresh it on its own.
+
+Site icons are static files at the domain root (this is what Safari looks for):
+
+- https://your-domain/icon.png
+- https://your-domain/apple-touch-icon.png
+- https://your-domain/favicon.ico
+
+If those URLs 404, the tab and home-screen icons will be blank. Confirm the Duck DNS name is
+attached to the Vercel project (CNAME to `cname.vercel-dns.com`), not to a raw IP.
 
 ## 📱 Making it a fully fledged app
 
