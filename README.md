@@ -39,6 +39,8 @@ tracking, and no server-side database for your recipes — your data never leave
   Bakery, Pantry, Frozen, Spices & Condiments, or Beverages.
 - A **mobile-friendly checklist** with tap-to-cross-off items, manual item entry, and progress
   tracking.
+- **Nearby prices:** save your shopping address in Settings, then tap any grocery item to see
+  stores near you and current flyer prices. Tap a price to open that store's website.
 
 ### Install as a real app (PWA)
 RecipeVault is a Progressive Web App. After you open it once in a browser, you can install it:

@@ -167,3 +167,51 @@ export interface ScrapedRecipe {
   tags: string[];
   cuisine: string | null;
 }
+
+/** The shopper's saved location, used to find nearby grocery stores and prices. */
+export interface SavedAddress {
+  query: string;
+  formatted: string;
+  line1: string;
+  city: string;
+  state: string;
+  postalCode: string;
+  country: string;
+  /** ISO 3166-1 alpha-2 when known, e.g. "ca" or "us". */
+  countryCode?: string;
+  lat: number;
+  lng: number;
+  updatedAt: number;
+}
+
+export interface SettingsRecord {
+  key: string;
+  address: SavedAddress | null;
+}
+
+export interface NearbyStore {
+  id: string;
+  name: string;
+  brand: string | null;
+  shopType: string | null;
+  address: string | null;
+  lat: number;
+  lng: number;
+  distanceMiles: number;
+}
+
+export interface GroceryDeal {
+  id: string;
+  storeName: string;
+  itemName: string;
+  price: number | null;
+  originalPrice: number | null;
+  priceLabel: string;
+  saleStory: string | null;
+  distanceMiles: number | null;
+  address: string | null;
+  /** Product or store-search URL opened when the shopper taps the price. */
+  productUrl: string;
+  imageUrl: string | null;
+  source: "flyer" | "ecom" | "nearby";
+}

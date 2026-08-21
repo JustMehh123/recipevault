@@ -1,8 +1,8 @@
 "use client";
 
 import * as React from "react";
-import { Trash2, PackagePlus } from "lucide-react";
-import type { GroceryCategory, GroceryList } from "@/types";
+import { Trash2, PackagePlus, Tag } from "lucide-react";
+import type { GroceryCategory, GroceryItem, GroceryList } from "@/types";
 import { GROCERY_CATEGORIES } from "@/types";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,7 @@ import {
   removeGroceryItem,
   toggleGroceryItem,
 } from "@/lib/db/grocery";
+import { StoreDealsDialog } from "@/components/store-deals-dialog";
 
 const CATEGORY_ICONS: Record<GroceryCategory, string> = {
   Produce: "🥦",
@@ -31,6 +32,7 @@ const CATEGORY_ICONS: Record<GroceryCategory, string> = {
 
 export function GroceryChecklist({ list }: { list: GroceryList }) {
   const [addOpen, setAddOpen] = React.useState(false);
+  const [dealItem, setDealItem] = React.useState<GroceryItem | null>(null);
   const [name, setName] = React.useState("");
   const [quantity, setQuantity] = React.useState("");
   const [unit, setUnit] = React.useState("");
@@ -158,10 +160,11 @@ export function GroceryChecklist({ list }: { list: GroceryList }) {
                       <Checkbox
                         checked={item.checked}
                         onCheckedChange={() => toggleGroceryItem(list.id, item.id)}
+                        aria-label={`Mark ${item.name} as collected`}
                       />
                       <button
                         type="button"
-                        onClick={() => toggleGroceryItem(list.id, item.id)}
+                        onClick={() => setDealItem(item)}
                         className={cn(
                           "flex-1 text-left text-sm",
                           item.checked && "text-[var(--muted-foreground)] line-through",
@@ -173,14 +176,26 @@ export function GroceryChecklist({ list }: { list: GroceryList }) {
                         {item.unit && <span className="font-medium">{item.unit} </span>}
                         {item.name}
                         {item.notes && <span className="text-[var(--muted-foreground)]"> · {item.notes}</span>}
+                        <span className="mt-0.5 block text-[11px] font-medium text-[var(--primary)] no-underline">
+                          Compare nearby prices
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDealItem(item)}
+                        className="rounded-lg p-2 text-[var(--primary)] hover:bg-[var(--muted)]"
+                        aria-label={`Find prices for ${item.name}`}
+                        title="Find nearby prices"
+                      >
+                        <Tag className="h-4 w-4" />
                       </button>
                       <button
                         type="button"
                         onClick={() => removeGroceryItem(list.id, item.id)}
-                        className="opacity-0 transition-opacity group-hover:opacity-100"
+                        className="rounded-lg p-2 text-[var(--muted-foreground)] hover:bg-[var(--muted)] hover:text-red-500"
                         aria-label="Remove item"
                       >
-                        <Trash2 className="h-4 w-4 text-[var(--muted-foreground)] hover:text-red-500" />
+                        <Trash2 className="h-4 w-4" />
                       </button>
                     </li>
                   ))}
@@ -190,6 +205,8 @@ export function GroceryChecklist({ list }: { list: GroceryList }) {
           })}
         </div>
       )}
+
+      <StoreDealsDialog item={dealItem} open={dealItem !== null} onOpenChange={(open) => !open && setDealItem(null)} />
     </div>
   );
 }

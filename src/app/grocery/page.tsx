@@ -5,7 +5,8 @@ import { Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useLiveQuery } from "dexie-react-hooks";
 import { toast } from "sonner";
-import { ShoppingCart, Trash2, PlusCircle } from "lucide-react";
+import { ShoppingCart, Trash2, PlusCircle, MapPin } from "lucide-react";
+import Link from "next/link";
 import { getDb } from "@/lib/db/client";
 import { deleteGroceryList, generateGroceryListFromWeek } from "@/lib/db/grocery";
 import { GroceryChecklist } from "@/components/grocery-checklist";
@@ -25,6 +26,10 @@ function GroceryPageInner() {
 
   const [selectedId, setSelectedId] = React.useState<string | null>(listParam);
   const [generating, setGenerating] = React.useState(false);
+  const savedAddress = useLiveQuery(async () => {
+    const row = await getDb().settings.get("app");
+    return row?.address ?? null;
+  }, []);
 
   React.useEffect(() => {
     if (listParam) {
@@ -74,8 +79,32 @@ function GroceryPageInner() {
         <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Smart Grocery List</h1>
         <p className="text-[var(--muted-foreground)]">
           Auto-generated from your weekly plan, with duplicate ingredients merged and grouped by aisle.
+          Tap an item to compare nearby store prices.
         </p>
       </div>
+
+      {savedAddress ? (
+        <p className="flex items-start gap-2 text-sm text-[var(--muted-foreground)]">
+          <MapPin className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>
+            Shopping near {savedAddress.formatted}.{" "}
+            <Link href="/settings" className="text-[var(--primary)] hover:underline">
+              Change address
+            </Link>
+          </span>
+        </p>
+      ) : savedAddress === null ? (
+        <p className="flex items-start gap-2 rounded-xl border border-dashed border-[var(--border)] bg-[var(--muted)]/40 px-3 py-2 text-sm">
+          <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-[var(--primary)]" />
+          <span>
+            Add your address in{" "}
+            <Link href="/settings" className="font-medium text-[var(--primary)] hover:underline">
+              Settings
+            </Link>{" "}
+            so tapping a grocery item can show stores near you and their prices.
+          </span>
+        </p>
+      ) : null}
 
       <div className="flex flex-wrap items-center gap-2">
         <Button onClick={handleGenerateThisWeek} disabled={generating}>

@@ -1,32 +1,35 @@
 import { getDb } from "@/lib/db/client";
-import type { GroceryList, MealPlanEntry, Recipe } from "@/types";
+import type { GroceryList, MealPlanEntry, Recipe, SettingsRecord } from "@/types";
 
 /** Shape of the JSON file produced by `exportBackup` / accepted by `importBackup`. */
 export interface RecipeVaultBackup {
   format: "recipevault-backup";
-  version: 1;
+  version: 1 | 2;
   exportedAt: string;
   recipes: Recipe[];
   mealPlanEntries: MealPlanEntry[];
   groceryLists: GroceryList[];
+  settings?: SettingsRecord[];
 }
 
 /** Serializes every local table into a single downloadable JSON backup. */
 export async function exportBackup(): Promise<RecipeVaultBackup> {
   const db = getDb();
-  const [recipes, mealPlanEntries, groceryLists] = await Promise.all([
+  const [recipes, mealPlanEntries, groceryLists, settings] = await Promise.all([
     db.recipes.toArray(),
     db.mealPlanEntries.toArray(),
     db.groceryLists.toArray(),
+    db.settings.toArray(),
   ]);
 
   return {
     format: "recipevault-backup",
-    version: 1,
+    version: 2,
     exportedAt: new Date().toISOString(),
     recipes,
     mealPlanEntries,
     groceryLists,
+    settings,
   };
 }
 
@@ -73,17 +76,21 @@ export async function importBackup(raw: unknown, mode: ImportMode = "merge"): Pr
   }
 
   const db = getDb();
-  await db.transaction("rw", db.recipes, db.mealPlanEntries, db.groceryLists, async () => {
+  await db.transaction("rw", db.recipes, db.mealPlanEntries, db.groceryLists, db.settings, async () => {
     if (mode === "replace") {
       await Promise.all([
         db.recipes.clear(),
         db.mealPlanEntries.clear(),
         db.groceryLists.clear(),
+        db.settings.clear(),
       ]);
     }
     await db.recipes.bulkPut(raw.recipes);
     await db.mealPlanEntries.bulkPut(raw.mealPlanEntries);
     await db.groceryLists.bulkPut(raw.groceryLists);
+    if (raw.settings?.length) {
+      await db.settings.bulkPut(raw.settings);
+    }
   });
 
   return {
@@ -95,11 +102,12 @@ export async function importBackup(raw: unknown, mode: ImportMode = "merge"): Pr
 
 export async function clearAllData(): Promise<void> {
   const db = getDb();
-  await db.transaction("rw", db.recipes, db.mealPlanEntries, db.groceryLists, async () => {
+  await db.transaction("rw", db.recipes, db.mealPlanEntries, db.groceryLists, db.settings, async () => {
     await Promise.all([
       db.recipes.clear(),
       db.mealPlanEntries.clear(),
       db.groceryLists.clear(),
+      db.settings.clear(),
     ]);
   });
 }

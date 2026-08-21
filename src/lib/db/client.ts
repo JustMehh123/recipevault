@@ -1,15 +1,16 @@
 import Dexie, { type Table } from "dexie";
-import type { GroceryList, MealPlanEntry, Recipe } from "@/types";
+import type { GroceryList, MealPlanEntry, Recipe, SettingsRecord } from "@/types";
 
 /**
  * RecipeVault's local-first database. Everything lives in the browser via
- * IndexedDB (through Dexie) — recipes, meal plans, and grocery lists never
- * leave the device.
+ * IndexedDB (through Dexie) — recipes, meal plans, grocery lists, and the
+ * saved shopping address never leave the device.
  */
 export class RecipeVaultDatabase extends Dexie {
   recipes!: Table<Recipe, string>;
   mealPlanEntries!: Table<MealPlanEntry, string>;
   groceryLists!: Table<GroceryList, string>;
+  settings!: Table<SettingsRecord, string>;
 
   constructor() {
     super("RecipeVaultDB");
@@ -17,6 +18,12 @@ export class RecipeVaultDatabase extends Dexie {
       recipes: "id, title, createdAt, updatedAt, favorite, *tags",
       mealPlanEntries: "id, weekStart, day, mealType, recipeId, [weekStart+day+mealType]",
       groceryLists: "id, createdAt, weekStart",
+    });
+    this.version(2).stores({
+      recipes: "id, title, createdAt, updatedAt, favorite, *tags",
+      mealPlanEntries: "id, weekStart, day, mealType, recipeId, [weekStart+day+mealType]",
+      groceryLists: "id, createdAt, weekStart",
+      settings: "key",
     });
   }
 }

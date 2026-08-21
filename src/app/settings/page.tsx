@@ -13,12 +13,14 @@ import {
   BookMarked,
   CalendarDays,
   ShoppingCart,
+  MapPin,
 } from "lucide-react";
 import { getDb } from "@/lib/db/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { clearAllData, downloadBackupFile, exportBackup, importBackup } from "@/lib/db/backup";
 import { InstallAppCard } from "@/components/install-app-card";
+import { AddressForm } from "@/components/address-form";
 
 export default function SettingsPage() {
   const fileInputRef = React.useRef<HTMLInputElement>(null);
@@ -29,6 +31,10 @@ export default function SettingsPage() {
   const recipeCount = useLiveQuery(async () => getDb().recipes.count(), [], undefined);
   const mealPlanCount = useLiveQuery(async () => getDb().mealPlanEntries.count(), [], undefined);
   const groceryListCount = useLiveQuery(async () => getDb().groceryLists.count(), [], undefined);
+  const savedAddress = useLiveQuery(async () => {
+    const row = await getDb().settings.get("app");
+    return row?.address ?? null;
+  }, []);
 
   async function handleExport() {
     setExporting(true);
@@ -112,6 +118,21 @@ export default function SettingsPage() {
           <StatBlock icon={<BookMarked className="h-4 w-4" />} label="Recipes" value={recipeCount} />
           <StatBlock icon={<CalendarDays className="h-4 w-4" />} label="Planned meals" value={mealPlanCount} />
           <StatBlock icon={<ShoppingCart className="h-4 w-4" />} label="Grocery lists" value={groceryListCount} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <MapPin className="h-5 w-5" /> Shopping address
+          </CardTitle>
+          <CardDescription>
+            Save where you shop (Canada and the US). Grocery-list items will show nearby stores
+            and flyer prices — tap a price to open that store&apos;s website.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <AddressForm current={savedAddress ?? null} />
         </CardContent>
       </Card>
 
