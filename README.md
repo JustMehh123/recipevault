@@ -55,6 +55,11 @@ tracking, and no server-side database for your recipes — your data never leave
   Bakery, Pantry, Frozen, Spices & Condiments, or Beverages.
 - A **mobile-friendly checklist** with tap-to-cross-off items, manual item entry, and progress
   tracking.
+- **Real package sizes.** Nobody buys "2 tbsp of soy sauce" — shops sell bottles. Every item
+  offers the retail sizes it's actually sold in (milk: 1 L / 2 L / 4 L in Canada, quart / gallon in
+  the US; eggs by the 6/12/18; flour in 1–10 kg bags; spices in 30–100 g jars). Tap a size and
+  RecipeVault searches for *that product*, tells you **how many packs to buy**, and shows a
+  **price per 100 g / 100 ml** so you can compare sizes fairly.
 - **Nearby prices:** save your shopping address in Settings, then tap any grocery item to see
   stores near you and current flyer prices. Tap a price to open that store's website, or tap
   **Directions** to open the store in Maps.
@@ -152,7 +157,7 @@ npm run test:coverage # Coverage summary
 ## 🧪 Tests
 
 The parsing, scaling, merging, and scraping logic is the heart of RecipeVault, and it handles
-genuinely messy real-world input — so it's covered by **78 unit tests**:
+genuinely messy real-world input — so it's covered by **97 unit tests**:
 
 | Area | File |
 | --- | --- |
@@ -161,6 +166,7 @@ genuinely messy real-world input — so it's covered by **78 unit tests**:
 | Metric ⇄ US conversion and round-tripping | `src/lib/parser/units.test.ts` |
 | Timer detection, ISO durations, pasted text | `src/lib/parser/misc.test.ts` |
 | JSON-LD (`@graph`, `HowToSection`) & microdata extraction | `src/lib/scraper/scraper.test.ts` |
+| Retail package sizes, pack counts, unit pricing | `src/lib/shopping/packages.test.ts` |
 
 These cover the edge cases that are easy to break and hard to eyeball: unicode fractions (`½`),
 mixed numbers (`1 1/2`), ranges, `@type` arrays, malformed JSON-LD with trailing commas, and the

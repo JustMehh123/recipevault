@@ -20,6 +20,9 @@ import {
   toggleGroceryItem,
 } from "@/lib/db/grocery";
 import { StoreDealsDialog } from "@/components/store-deals-dialog";
+import { detectRegion } from "@/lib/shopping/region";
+import { bestPackIndex, getPackageOptions, packsNeeded } from "@/lib/shopping/packages";
+import { toBaseAmount } from "@/lib/parser/units";
 
 const CATEGORY_ICONS: Record<GroceryCategory, string> = {
   Produce: "🥦",
@@ -35,6 +38,17 @@ const CATEGORY_ICONS: Record<GroceryCategory, string> = {
 
 export function GroceryChecklist({ list }: { list: GroceryList }) {
   // Resolve recipe titles so each line can show what it's for.
+  const address = useLiveQuery(async () => {
+    const row = await getDb().settings.get("app");
+    return row?.address ?? null;
+  }, []);
+
+  const region = detectRegion({
+    country: address?.country,
+    countryCode: address?.countryCode,
+    postalCode: address?.postalCode,
+  });
+
   const recipeTitles = useLiveQuery(async () => {
     const ids = Array.from(new Set(list.items.flatMap((i) => i.sourceRecipeIds)));
     if (ids.length === 0) return new Map<string, string>();
@@ -258,7 +272,17 @@ export function GroceryChecklist({ list }: { list: GroceryList }) {
                           );
                         })()}
                         <span className="mt-0.5 block text-[11px] font-medium text-[var(--primary)] no-underline">
-                          Compare nearby prices
+                          {(() => {
+                            const options = getPackageOptions(item.name, item.unit, region);
+                            if (options.length === 0) return "Compare nearby prices";
+                            const base =
+                              item.quantity !== null ? toBaseAmount(item.quantity, item.unit) : null;
+                            const count =
+                              item.quantity !== null && !item.unit ? item.quantity : null;
+                            const pack = options[bestPackIndex(base, count, options)];
+                            const packs = packsNeeded(base, count, pack);
+                            return `Buy ${packs} × ${pack.label} · compare prices`;
+                          })()}
                         </span>
                       </button>
                       <button
