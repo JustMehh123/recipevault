@@ -59,6 +59,29 @@ export async function toggleFavorite(id: string): Promise<void> {
   await db.recipes.update(id, { favorite: !recipe.favorite, updatedAt: Date.now() });
 }
 
+/**
+ * Finds an existing recipe that looks like the one being imported — matched by
+ * source URL first, then by a normalized title. Used to warn about duplicates.
+ */
+export async function findDuplicateRecipe(params: {
+  sourceUrl?: string | null;
+  title: string;
+}): Promise<Recipe | undefined> {
+  const db = getDb();
+  const all = await db.recipes.toArray();
+
+  if (params.sourceUrl) {
+    const url = params.sourceUrl.replace(/\/+$/, "").toLowerCase();
+    const byUrl = all.find((r) => (r.sourceUrl ?? "").replace(/\/+$/, "").toLowerCase() === url);
+    if (byUrl) return byUrl;
+  }
+
+  const normalize = (t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  const title = normalize(params.title);
+  if (!title) return undefined;
+  return all.find((r) => normalize(r.title) === title);
+}
+
 export async function getAllTags(): Promise<string[]> {
   const db = getDb();
   const recipes = await db.recipes.toArray();

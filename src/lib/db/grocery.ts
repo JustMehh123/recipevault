@@ -4,6 +4,7 @@ import { generateId } from "@/lib/utils";
 import { aggregateIngredients, type AggregateInput } from "@/lib/parser/aggregate";
 import { scaleIngredients } from "@/lib/parser/ingredients";
 import { getWeekEntries } from "@/lib/db/mealPlan";
+import { getPantryStaples, isPantryStaple } from "@/lib/db/settings";
 import { formatWeekRange } from "@/lib/utils";
 
 export async function listGroceryLists(): Promise<GroceryList[]> {
@@ -86,7 +87,21 @@ export async function clearCheckedItems(listId: string): Promise<void> {
  * the given week's meal plan, scaling ingredients to the planned servings,
  * and merging duplicates into aisle-categorized line items.
  */
+export interface GenerateResult {
+  list: GroceryList;
+  /** Number of line items skipped because they're pantry staples. */
+  skippedStaples: number;
+}
+
 export async function generateGroceryListFromWeek(weekStart: string): Promise<GroceryList> {
+  const { list } = await generateGroceryListFromWeekDetailed(weekStart);
+  return list;
+}
+
+/** Same as `generateGroceryListFromWeek`, but also reports skipped pantry staples. */
+export async function generateGroceryListFromWeekDetailed(
+  weekStart: string,
+): Promise<GenerateResult> {
   const db = getDb();
   const entries = await getWeekEntries(weekStart);
 
@@ -106,7 +121,11 @@ export async function generateGroceryListFromWeek(weekStart: string): Promise<Gr
     scaled.forEach((ingredient) => inputs.push({ ingredient, recipeId: recipe.id }));
   }
 
-  const items = aggregateIngredients(inputs);
+  const allItems = aggregateIngredients(inputs);
+
+  const staples = await getPantryStaples();
+  const items = allItems.filter((item) => !isPantryStaple(item.name, staples));
+  const skippedStaples = allItems.length - items.length;
 
   const list: GroceryList = {
     id: generateId(),
@@ -118,5 +137,5 @@ export async function generateGroceryListFromWeek(weekStart: string): Promise<Gr
   };
 
   await db.groceryLists.put(list);
-  return list;
+  return { list, skippedStaples };
 }

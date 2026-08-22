@@ -13,10 +13,14 @@ import {
   MonitorOff,
   CheckCircle2,
   Circle,
+  Check,
 } from "lucide-react";
 import type { Recipe } from "@/types";
 import { Button } from "@/components/ui/button";
-import { scaleIngredients, displayIngredient } from "@/lib/parser/ingredients";
+import { scaleIngredients, displayIngredient, scaleTextQuantities } from "@/lib/parser/ingredients";
+import { convertIngredients, hasConvertibleUnits, UNIT_SYSTEM_LABELS, type UnitSystem } from "@/lib/parser/units";
+import { detectTimers } from "@/lib/parser/timers";
+import { TimerBar, TimerChips, useCookTimer } from "@/components/cook-timer";
 import { cn } from "@/lib/utils";
 
 interface WakeLockSentinelLike {
@@ -35,7 +39,9 @@ export function CookModeModal({ recipe, open, onOpenChange }: CookModeModalProps
   const [checkedIngredients, setCheckedIngredients] = React.useState<Set<string>>(new Set());
   const [stepIndex, setStepIndex] = React.useState(0);
   const [wakeLockActive, setWakeLockActive] = React.useState(false);
+  const [unitSystem, setUnitSystem] = React.useState<UnitSystem>("original");
   const wakeLockRef = React.useRef<WakeLockSentinelLike | null>(null);
+  const { timer, start: startTimer, toggle: toggleTimer, reset: resetTimer, clear: clearTimer } = useCookTimer();
 
   const releaseWakeLock = React.useCallback(async () => {
     if (wakeLockRef.current) {
@@ -90,8 +96,19 @@ export function CookModeModal({ recipe, open, onOpenChange }: CookModeModalProps
 
   const factor = recipe.servings > 0 ? servings / recipe.servings : 1;
   const scaledIngredients = React.useMemo(
-    () => scaleIngredients(recipe.ingredients, factor),
-    [recipe.ingredients, factor],
+    () => convertIngredients(scaleIngredients(recipe.ingredients, factor), unitSystem),
+    [recipe.ingredients, factor, unitSystem],
+  );
+  const canConvert = React.useMemo(() => hasConvertibleUnits(recipe.ingredients), [recipe.ingredients]);
+
+  const scaledInstructions = React.useMemo(
+    () => recipe.instructions.map((step) => scaleTextQuantities(step, factor)),
+    [recipe.instructions, factor],
+  );
+
+  const stepTimers = React.useMemo(
+    () => detectTimers(scaledInstructions[stepIndex] ?? ""),
+    [scaledInstructions, stepIndex],
   );
 
   function toggleIngredient(id: string) {
@@ -147,6 +164,10 @@ export function CookModeModal({ recipe, open, onOpenChange }: CookModeModalProps
             </div>
           </header>
 
+          {timer && (
+            <TimerBar timer={timer} onToggle={toggleTimer} onReset={resetTimer} onClear={clearTimer} />
+          )}
+
           <div className="flex flex-1 flex-col overflow-hidden lg:flex-row">
             <aside className="flex flex-col gap-3 overflow-y-auto border-b border-[var(--border)] p-4 sm:p-6 lg:w-80 lg:border-b-0 lg:border-r">
               <div className="flex items-center justify-between rounded-xl bg-[var(--muted)] p-3">
@@ -171,6 +192,27 @@ export function CookModeModal({ recipe, open, onOpenChange }: CookModeModalProps
                   </Button>
                 </div>
               </div>
+
+              {canConvert && (
+                <div className="flex items-center gap-1 rounded-xl bg-[var(--muted)] p-1">
+                  {(Object.keys(UNIT_SYSTEM_LABELS) as UnitSystem[]).map((system) => (
+                    <button
+                      key={system}
+                      type="button"
+                      onClick={() => setUnitSystem(system)}
+                      aria-pressed={unitSystem === system}
+                      className={cn(
+                        "flex-1 rounded-lg px-2 py-1.5 text-xs font-medium transition-colors",
+                        unitSystem === system
+                          ? "bg-[var(--card)] text-[var(--foreground)] shadow-sm"
+                          : "text-[var(--muted-foreground)] hover:text-[var(--foreground)]",
+                      )}
+                    >
+                      {UNIT_SYSTEM_LABELS[system]}
+                    </button>
+                  ))}
+                </div>
+              )}
 
               <p className="text-xs font-medium uppercase tracking-wide text-[var(--muted-foreground)]">
                 Ingredients
@@ -211,8 +253,9 @@ export function CookModeModal({ recipe, open, onOpenChange }: CookModeModalProps
                       Step {stepIndex + 1} of {totalSteps}
                     </p>
                     <p className="text-2xl font-medium leading-relaxed sm:text-3xl">
-                      {recipe.instructions[stepIndex]}
+                      {scaledInstructions[stepIndex]}
                     </p>
+                    <TimerChips timers={stepTimers} onStart={startTimer} />
                   </div>
 
                   <div className="mt-10 flex items-center justify-between gap-3">
@@ -224,25 +267,31 @@ export function CookModeModal({ recipe, open, onOpenChange }: CookModeModalProps
                     >
                       <ChevronLeft className="h-5 w-5" /> Previous
                     </Button>
-                    <div className="flex gap-1.5">
+                    <div className="flex flex-wrap justify-center gap-1.5">
                       {recipe.instructions.map((_, i) => (
-                        <span
+                        <button
                           key={i}
+                          type="button"
+                          onClick={() => setStepIndex(i)}
+                          aria-label={`Go to step ${i + 1}`}
+                          aria-current={i === stepIndex}
                           className={cn(
-                            "h-1.5 w-5 rounded-full bg-[var(--muted)]",
+                            "h-2 w-5 rounded-full bg-[var(--muted)] transition-colors",
                             i === stepIndex && "bg-[var(--primary)]",
                             i < stepIndex && "bg-[var(--accent)]",
                           )}
                         />
                       ))}
                     </div>
-                    <Button
-                      size="lg"
-                      onClick={() => setStepIndex((i) => Math.min(totalSteps - 1, i + 1))}
-                      disabled={stepIndex === totalSteps - 1}
-                    >
-                      Next <ChevronRight className="h-5 w-5" />
-                    </Button>
+                    {stepIndex === totalSteps - 1 ? (
+                      <Button size="lg" variant="accent" onClick={() => onOpenChange(false)}>
+                        <Check className="h-5 w-5" /> Done
+                      </Button>
+                    ) : (
+                      <Button size="lg" onClick={() => setStepIndex((i) => Math.min(totalSteps - 1, i + 1))}>
+                        Next <ChevronRight className="h-5 w-5" />
+                      </Button>
+                    )}
                   </div>
                   <p className="mt-3 hidden text-center text-xs text-[var(--muted-foreground)] sm:block">
                     Use the ← and → arrow keys to move between steps.

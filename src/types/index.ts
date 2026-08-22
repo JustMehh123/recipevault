@@ -187,7 +187,19 @@ export interface SavedAddress {
 export interface SettingsRecord {
   key: string;
   address: SavedAddress | null;
+  /** Ingredients you always keep on hand; skipped when generating grocery lists. */
+  pantryStaples?: string[];
 }
+
+export const DEFAULT_PANTRY_STAPLES = [
+  "salt",
+  "black pepper",
+  "pepper",
+  "water",
+  "olive oil",
+  "vegetable oil",
+  "ice",
+];
 
 export interface NearbyStore {
   id: string;

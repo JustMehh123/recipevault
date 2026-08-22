@@ -272,12 +272,84 @@ export function formatQuantity(quantity: number | null): string {
   return Number(quantity.toFixed(2)).toString();
 }
 
-/** Scales a single ingredient's quantity by a given factor, returning a new object. */
+/**
+ * Patterns whose numbers must never be scaled: oven temperatures, percentages,
+ * pan dimensions, physical sizes, and times. Scaling "bake at 350F" or a
+ * "9x13 inch pan" would be wrong even though the recipe doubles.
+ */
+const NON_SCALABLE_PATTERNS: RegExp[] = [
+  /\d+(?:\.\d+)?\s*(?:°|deg(?:rees)?)?\s*[FC]\b/gi,
+  /\d+(?:\.\d+)?\s*%/g,
+  /\d+(?:\.\d+)?\s*[x×]\s*\d+(?:\.\d+)?/gi,
+  /\d+(?:\.\d+)?\s*-?\s*(?:inch|inches|in|cm|mm|ft|foot|feet)\b/gi,
+  /\d+(?:\.\d+)?\s*-?\s*(?:minute|minutes|min|mins|hour|hours|hr|hrs|second|seconds|sec|secs|day|days|week|weeks|month|months)\b/gi,
+];
+
+const PROTECT_START = "\uE000";
+const PROTECT_END = "\uE001";
+
+function protectNonScalable(text: string): { masked: string; tokens: string[] } {
+  const tokens: string[] = [];
+  let masked = text;
+  for (const pattern of NON_SCALABLE_PATTERNS) {
+    masked = masked.replace(new RegExp(pattern.source, pattern.flags), (match) => {
+      const token = `${PROTECT_START}${String.fromCharCode(0xe100 + tokens.length)}${PROTECT_END}`;
+      tokens.push(match);
+      return token;
+    });
+  }
+  return { masked, tokens };
+}
+
+function restoreProtected(text: string, tokens: string[]): string {
+  return text.replace(
+    new RegExp(`${PROTECT_START}(.)${PROTECT_END}`, "g"),
+    (_match, char: string) => tokens[char.charCodeAt(0) - 0xe100] ?? "",
+  );
+}
+
+function formatScaledNumber(value: number, originalToken: string): string {
+  // Small amounts read better as fractions ("1 1/4"); larger metric values
+  // ("2400mL", "900g") are rounded to whole numbers.
+  if (originalToken.includes("/") || value < 10) return formatQuantity(value);
+  return String(Math.round(value));
+}
+
+/**
+ * Scales every numeric amount embedded in free-text ingredient wording, so
+ * metric equivalents and piece counts keep pace with the serving multiplier:
+ * "(960mL)" -> "(2400mL)", "or 8 pieces" -> "or 20 pieces".
+ * Numbers attached to letters ("V8"), temperatures, times, and pan sizes are
+ * deliberately left alone.
+ */
+export function scaleTextQuantities(text: string, factor: number): string {
+  if (!text || factor === 1) return text;
+
+  const { masked, tokens } = protectNonScalable(text);
+
+  const scaled = masked.replace(
+    /(^|[^A-Za-z0-9.\/])(\d+\s+\d+\/\d+|\d+\/\d+|\d+(?:\.\d+)?)(?!\s*\/\s*\d)/g,
+    (match, prefix: string, numberToken: string) => {
+      const value = parseCompoundNumber(numberToken.replace(/\s+/g, " ").trim());
+      if (value === null || value === 0) return match;
+      return `${prefix}${formatScaledNumber(value * factor, numberToken)}`;
+    },
+  );
+
+  return restoreProtected(scaled, tokens);
+}
+
+/**
+ * Scales a single ingredient by a given factor: the parsed quantity plus any
+ * amounts written into the ingredient's name/notes text.
+ */
 export function scaleIngredient(ingredient: Ingredient, factor: number): Ingredient {
-  if (ingredient.quantity === null || factor === 1) return ingredient;
+  if (factor === 1) return ingredient;
   return {
     ...ingredient,
-    quantity: ingredient.quantity * factor,
+    quantity: ingredient.quantity === null ? null : ingredient.quantity * factor,
+    name: scaleTextQuantities(ingredient.name, factor),
+    notes: ingredient.notes ? scaleTextQuantities(ingredient.notes, factor) : ingredient.notes,
   };
 }
 

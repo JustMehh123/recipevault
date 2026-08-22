@@ -9,6 +9,7 @@ import { AddressForm } from "@/components/address-form";
 import { getDb } from "@/lib/db/client";
 import { formatDistance } from "@/lib/shopping/geo";
 import { detectRegion } from "@/lib/shopping/region";
+import { storeMapsUrl } from "@/lib/shopping/chains";
 import { formatQuantity } from "@/lib/parser/ingredients";
 
 interface StoreDealsDialogProps {
@@ -33,6 +34,13 @@ export function StoreDealsDialog({ item, open, onOpenChange }: StoreDealsDialogP
     if (!open || !item || !address) {
       setDeals([]);
       setError(null);
+      return;
+    }
+
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      setDeals([]);
+      setError("Store prices need a connection. Your grocery list itself works offline.");
+      setLoading(false);
       return;
     }
 
@@ -127,15 +135,28 @@ export function StoreDealsDialog({ item, open, onOpenChange }: StoreDealsDialogP
                   <p className="truncate text-sm font-semibold">{deal.storeName}</p>
                   <p className="truncate text-xs text-[var(--muted-foreground)]">{deal.itemName}</p>
                   <p className="mt-0.5 flex items-center gap-1 text-xs text-[var(--muted-foreground)]">
-                    {deal.distanceMiles != null && (
+                    {deal.distanceMiles != null ? (
                       <>
-                        <MapPin className="h-3 w-3" />
-                        {formatDistance(deal.distanceMiles, region)}
-                        {deal.address ? ` · ${deal.address}` : ""}
+                        <MapPin className="h-3 w-3 shrink-0" />
+                        <span className="truncate">
+                          {formatDistance(deal.distanceMiles, region)}
+                          {deal.address ? ` · ${deal.address}` : ""}
+                        </span>
                       </>
+                    ) : (
+                      <span className="truncate">{deal.saleStory}</span>
                     )}
-                    {deal.distanceMiles == null && deal.saleStory}
                   </p>
+                  {deal.distanceMiles != null && (
+                    <a
+                      href={storeMapsUrl(deal.storeName, deal.address)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-0.5 inline-block text-[11px] text-[var(--primary)] hover:underline"
+                    >
+                      Directions
+                    </a>
+                  )}
                 </div>
                 <a
                   href={deal.productUrl}

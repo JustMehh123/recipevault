@@ -18,29 +18,50 @@ tracking, and no server-side database for your recipes — your data never leave
   parser splits it into ingredients and instructions automatically.
 - **Searchable, taggable grid** with built-in tags (Breakfast, Quick 15-Min, Dinner, Vegetarian,
   Vegan, Gluten-Free, and more) plus favoriting.
+- **Ranked search** across titles, tags, and ingredients, with sorting (recently updated, A–Z,
+  quickest first, most servings), per-tag counts, and result totals.
+- **Duplicate detection** — re-importing a recipe you already saved offers to open the existing
+  copy instead of silently creating another.
 - **Cook Mode** — a distraction-free, full-screen step-by-step view with:
   - A **screen wake-lock toggle** so your phone/tablet doesn't sleep mid-recipe.
   - An interactive **ingredient checklist**.
   - A **dynamic serving-size multiplier** that rescales every ingredient quantity in real time
     (including fractions, like scaling "1/2 cup" for 6 servings instead of 4).
+  - Jumpable step dots, arrow-key navigation, and a **Done** state on the final step.
+- **Deep quantity scaling:** amounts written inside the ingredient text scale too — `(960mL)` →
+  `(2400mL)`, `(360g)` → `(900g)`, `or 8 pieces` → `or 20 pieces`. Oven temperatures (`350F`),
+  times (`25 minutes`), pan sizes (`9x13 inch`), percentages (`2% milk`), and names with digits
+  (`V8`) are deliberately left untouched.
+- Quick scale presets (½×, 1×, 2×, 3×), a reset button, and **copy ingredients** to the clipboard.
 
 ### Weekly Meal Planner (`/planner`)
 - A **drag-and-drop, Monday–Sunday grid** for Breakfast, Lunch, and Dinner.
 - Drag any recipe from your vault straight onto a day/meal slot, or drag scheduled meals between
   slots to reschedule them.
+- **Copy Last Week** to repeat a plan, clear a single day, and see servings on every planned meal.
+  Today's column is highlighted.
 - One click to **generate a grocery list** from everything currently planned for the week.
 
 ### Smart Grocery List Generator (`/grocery`)
 - **"Generate List from Week"** collects every ingredient from your scheduled meals, scaled to the
   servings you planned.
 - **Ingredient aggregation** merges duplicates — "2 eggs" from one recipe and "3 eggs" from another
-  become a single "5 eggs" line.
+  become a single "5 eggs" line. Singular/plural spellings are matched too ("1 carrot" + "2 carrots").
+- **Unit-aware merging:** "2 cups milk" and "500 ml milk" are reconciled through a shared base unit
+  into one line, instead of being listed twice. Genuinely incompatible units ("2 cloves" vs
+  "1 head") correctly stay separate, and volume is never mixed with mass.
+- Each line shows **which recipes it's for**, so you know what you'd be dropping if you skip it.
 - **Aisle categorization** automatically files items under Produce, Meat & Seafood, Dairy & Eggs,
   Bakery, Pantry, Frozen, Spices & Condiments, or Beverages.
 - A **mobile-friendly checklist** with tap-to-cross-off items, manual item entry, and progress
   tracking.
 - **Nearby prices:** save your shopping address in Settings, then tap any grocery item to see
-  stores near you and current flyer prices. Tap a price to open that store's website.
+  stores near you and current flyer prices. Tap a price to open that store's website, or tap
+  **Directions** to open the store in Maps.
+- **Share or copy** the whole list, grouped by aisle, straight into Messages/Notes.
+- Works in **Canada and the US** — Canadian postal codes, CAD pricing, distances in km, and
+  Canadian banners (Loblaws, No Frills, Sobeys, Metro, Food Basics, IGA, FreshCo, Save-On-Foods,
+  Shoppers, Walmart.ca, Costco.ca).
 
 ### Install as a real app (PWA)
 RecipeVault is a Progressive Web App. After you open it once in a browser, you can install it:
@@ -118,12 +139,35 @@ your browser's IndexedDB.
 ### Useful scripts
 
 ```bash
-npm run dev        # Start the Next.js dev server
-npm run build      # Production build
-npm run start      # Start the production server (after building)
-npm run lint       # Run ESLint
-npm run typecheck  # Run the TypeScript compiler in --noEmit mode
+npm run dev           # Start the Next.js dev server
+npm run build         # Production build
+npm run start         # Start the production server (after building)
+npm run lint          # Run ESLint
+npm run typecheck     # Run the TypeScript compiler in --noEmit mode
+npm test              # Run the unit test suite (Vitest)
+npm run test:watch    # Tests in watch mode
+npm run test:coverage # Coverage summary
 ```
+
+## 🧪 Tests
+
+The parsing, scaling, merging, and scraping logic is the heart of RecipeVault, and it handles
+genuinely messy real-world input — so it's covered by **78 unit tests**:
+
+| Area | File |
+| --- | --- |
+| Ingredient parsing, scaling, fraction formatting | `src/lib/parser/ingredients.test.ts` |
+| Grocery merging, unit reconciliation, aisles | `src/lib/parser/aggregate.test.ts` |
+| Metric ⇄ US conversion and round-tripping | `src/lib/parser/units.test.ts` |
+| Timer detection, ISO durations, pasted text | `src/lib/parser/misc.test.ts` |
+| JSON-LD (`@graph`, `HowToSection`) & microdata extraction | `src/lib/scraper/scraper.test.ts` |
+
+These cover the edge cases that are easy to break and hard to eyeball: unicode fractions (`½`),
+mixed numbers (`1 1/2`), ranges, `@type` arrays, malformed JSON-LD with trailing commas, and the
+rules about what must *never* be scaled (oven temps, times, pan sizes, `V8`).
+
+GitHub Actions runs lint, typecheck, tests, and a production build on every push and PR
+(`.github/workflows/ci.yml`). See [CONTRIBUTING.md](./CONTRIBUTING.md).
 
 ## 🐳 Docker
 
@@ -161,6 +205,41 @@ Site icons are static files at the domain root (this is what Safari looks for):
 
 If those URLs 404, the tab and home-screen icons will be blank. Confirm the Duck DNS name is
 attached to the Vercel project (CNAME to `cname.vercel-dns.com`), not to a raw IP.
+
+## 🍎 Running fully offline on iOS (no App Store)
+
+RecipeVault's promise is "ad-free, local-first, works offline." On iOS that takes three
+specific things — all handled in-app, and all verifiable under **Settings → Offline readiness**.
+
+**1. Add to Home Screen.** In Safari: **Share → Add to Home Screen**. This is not cosmetic on iOS.
+Home-screen web apps launch full-screen, get their own storage bucket, and are exempt from the
+browser data cleanup that applies to ordinary tabs.
+
+**2. Persistent storage.** WebKit deletes script-writable storage (including IndexedDB) after
+roughly **7 days of not opening a site**. For a recipe vault that would be data loss. The app
+calls `navigator.storage.persist()` on launch, and Settings shows whether it was granted plus how
+much space your data uses.
+
+**3. A real offline app shell.** The service worker precaches every static route *and* scrapes
+each page's HTML for the hashed `/_next/static/...` bundles it needs, then caches those too.
+Without this step the HTML loads offline but the JavaScript doesn't, and you get a blank screen.
+Recipe detail pages are also cached as you open them. Use **Save app for offline** in Settings to
+force a full download before you travel.
+
+### What works with the network completely off
+
+| Works offline | Needs a connection |
+| --- | --- |
+| Recipe library, search, tags | Importing a recipe from a URL |
+| Recipe detail, scaling, unit conversion | Nearby store prices |
+| Cook Mode, timers, wake lock | Geocoding a new address |
+| Meal planner | |
+| Grocery lists and checking items off | |
+
+Both online-only features detect being offline and say so plainly instead of hanging.
+
+> **Moving devices?** Local-first means the data lives on *that* device. Use
+> **Settings → Backup** to export a JSON file before switching phones, then import it on the new one.
 
 ## 📱 Making it a fully fledged app
 

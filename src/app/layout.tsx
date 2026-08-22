@@ -74,11 +74,17 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       <body className="min-h-screen bg-[var(--background)] text-[var(--foreground)] antialiased">
         <ThemeProvider>
           <PwaRegister />
+          <a href="#main-content" className="skip-link">
+            Skip to content
+          </a>
           <Navbar />
           <OfflineBanner />
-          <div className="mx-auto max-w-6xl px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-6 sm:px-6 md:pb-24">
+          <main
+            id="main-content"
+            className="mx-auto max-w-6xl px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-6 sm:px-6 md:pb-24"
+          >
             {children}
-          </div>
+          </main>
           <BottomNav />
           <InstallPrompt />
           <Toaster richColors position="bottom-right" theme="system" />

@@ -3,11 +3,12 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ChevronLeft, ChevronRight, ShoppingCart, Trash2, CalendarDays } from "lucide-react";
+import { ChevronLeft, ChevronRight, ShoppingCart, Trash2, CalendarDays, CopyPlus } from "lucide-react";
 import { WeeklyGrid } from "@/components/weekly-grid";
+import { MobilePlanner } from "@/components/mobile-planner";
 import { Button } from "@/components/ui/button";
-import { generateGroceryListFromWeek } from "@/lib/db/grocery";
-import { clearWeek } from "@/lib/db/mealPlan";
+import { generateGroceryListFromWeekDetailed } from "@/lib/db/grocery";
+import { clearWeek, copyWeek } from "@/lib/db/mealPlan";
 import { addDays, formatWeekRange, getWeekStart } from "@/lib/utils";
 
 export default function PlannerPage() {
@@ -18,11 +19,14 @@ export default function PlannerPage() {
   async function handleGenerate() {
     setGenerating(true);
     try {
-      const list = await generateGroceryListFromWeek(weekStart);
+      const { list, skippedStaples } = await generateGroceryListFromWeekDetailed(weekStart);
       if (list.items.length === 0) {
         toast.warning("This week's plan is empty — add some meals first.");
       } else {
-        toast.success(`Generated a grocery list with ${list.items.length} items.`);
+        toast.success(
+          `Generated a grocery list with ${list.items.length} items.` +
+            (skippedStaples > 0 ? ` Skipped ${skippedStaples} pantry staple${skippedStaples === 1 ? "" : "s"}.` : ""),
+        );
         router.push(`/grocery?list=${list.id}`);
       }
     } catch {
@@ -36,6 +40,16 @@ export default function PlannerPage() {
     if (!confirm("Clear every meal scheduled this week?")) return;
     await clearWeek(weekStart);
     toast.success("Week cleared.");
+  }
+
+  async function handleCopyLastWeek() {
+    const previous = addDays(weekStart, -7);
+    const copied = await copyWeek(previous, weekStart);
+    if (copied === 0) {
+      toast.warning("The previous week has no meals to copy.");
+      return;
+    }
+    toast.success(`Copied ${copied} meal${copied === 1 ? "" : "s"} from last week.`);
   }
 
   return (
@@ -70,11 +84,15 @@ export default function PlannerPage() {
         <Button onClick={handleGenerate} disabled={generating}>
           <ShoppingCart className="h-4 w-4" /> Generate List from Week
         </Button>
+        <Button variant="outline" onClick={handleCopyLastWeek}>
+          <CopyPlus className="h-4 w-4" /> Copy Last Week
+        </Button>
         <Button variant="outline" onClick={handleClear}>
           <Trash2 className="h-4 w-4" /> Clear Week
         </Button>
       </div>
 
+      <MobilePlanner weekStart={weekStart} />
       <WeeklyGrid weekStart={weekStart} />
     </div>
   );

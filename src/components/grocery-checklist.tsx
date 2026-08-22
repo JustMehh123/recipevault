@@ -1,7 +1,10 @@
 "use client";
 
 import * as React from "react";
-import { Trash2, PackagePlus, Tag } from "lucide-react";
+import { Trash2, PackagePlus, Tag, Share2 } from "lucide-react";
+import { toast } from "sonner";
+import { useLiveQuery } from "dexie-react-hooks";
+import { getDb } from "@/lib/db/client";
 import type { GroceryCategory, GroceryItem, GroceryList } from "@/types";
 import { GROCERY_CATEGORIES } from "@/types";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -31,6 +34,18 @@ const CATEGORY_ICONS: Record<GroceryCategory, string> = {
 };
 
 export function GroceryChecklist({ list }: { list: GroceryList }) {
+  // Resolve recipe titles so each line can show what it's for.
+  const recipeTitles = useLiveQuery(async () => {
+    const ids = Array.from(new Set(list.items.flatMap((i) => i.sourceRecipeIds)));
+    if (ids.length === 0) return new Map<string, string>();
+    const recipes = await getDb().recipes.bulkGet(ids);
+    const map = new Map<string, string>();
+    recipes.forEach((r) => {
+      if (r) map.set(r.id, r.title);
+    });
+    return map;
+  }, [list]);
+
   const [addOpen, setAddOpen] = React.useState(false);
   const [dealItem, setDealItem] = React.useState<GroceryItem | null>(null);
   const [name, setName] = React.useState("");
@@ -52,6 +67,53 @@ export function GroceryChecklist({ list }: { list: GroceryList }) {
   const checkedCount = list.items.filter((i) => i.checked).length;
   const total = list.items.length;
   const progress = total > 0 ? Math.round((checkedCount / total) * 100) : 0;
+
+  /** Builds a plain-text version of the list, grouped by aisle, for sharing. */
+  function buildShareText(): string {
+    const sections: string[] = [`${list.name}`, ""];
+    for (const cat of GROCERY_CATEGORIES) {
+      const items = (grouped.get(cat) ?? []).filter((i) => !i.checked);
+      if (items.length === 0) continue;
+      sections.push(`${CATEGORY_ICONS[cat]} ${cat}`);
+      for (const item of items) {
+        const qty = item.quantity !== null ? `${formatQuantity(item.quantity)} ` : "";
+        const unit = item.unit ? `${item.unit} ` : "";
+        sections.push(`  - ${qty}${unit}${item.name}`);
+      }
+      sections.push("");
+    }
+    return sections.join("\n").trim();
+  }
+
+  async function handleShareList() {
+    const text = buildShareText();
+    if (!text) {
+      toast.warning("Everything is already checked off.");
+      return;
+    }
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: list.name, text });
+        return;
+      }
+      await navigator.clipboard.writeText(text);
+      toast.success("Grocery list copied to the clipboard.");
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      try {
+        await navigator.clipboard.writeText(text);
+        toast.success("Grocery list copied to the clipboard.");
+      } catch {
+        toast.error("Couldn't share this list.");
+      }
+    }
+  }
+
+  async function handleUncheckAll() {
+    await Promise.all(
+      list.items.filter((i) => i.checked).map((i) => toggleGroceryItem(list.id, i.id)),
+    );
+  }
 
   async function handleAddManual(e: React.FormEvent) {
     e.preventDefault();
@@ -86,14 +148,22 @@ export function GroceryChecklist({ list }: { list: GroceryList }) {
             />
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button variant="outline" size="sm" onClick={() => setAddOpen((v) => !v)}>
             <PackagePlus className="h-4 w-4" /> Add Item
           </Button>
+          <Button variant="outline" size="sm" onClick={handleShareList} disabled={total === 0}>
+            <Share2 className="h-4 w-4" /> Share
+          </Button>
           {checkedCount > 0 && (
-            <Button variant="ghost" size="sm" onClick={() => clearCheckedItems(list.id)}>
-              <Trash2 className="h-4 w-4" /> Clear checked
-            </Button>
+            <>
+              <Button variant="ghost" size="sm" onClick={handleUncheckAll}>
+                Uncheck all
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => clearCheckedItems(list.id)}>
+                <Trash2 className="h-4 w-4" /> Clear checked
+              </Button>
+            </>
           )}
         </div>
       </div>
@@ -176,6 +246,17 @@ export function GroceryChecklist({ list }: { list: GroceryList }) {
                         {item.unit && <span className="font-medium">{item.unit} </span>}
                         {item.name}
                         {item.notes && <span className="text-[var(--muted-foreground)]"> · {item.notes}</span>}
+                        {(() => {
+                          const titles = item.sourceRecipeIds
+                            .map((id) => recipeTitles?.get(id))
+                            .filter(Boolean) as string[];
+                          if (titles.length === 0) return null;
+                          return (
+                            <span className="mt-0.5 block truncate text-[11px] text-[var(--muted-foreground)]">
+                              for {titles.join(", ")}
+                            </span>
+                          );
+                        })()}
                         <span className="mt-0.5 block text-[11px] font-medium text-[var(--primary)] no-underline">
                           Compare nearby prices
                         </span>

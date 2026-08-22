@@ -13,12 +13,12 @@ import { Badge } from "@/components/ui/badge";
 import type { ScrapedRecipe } from "@/types";
 import { RECIPE_TAGS } from "@/types";
 import { parsePlainTextRecipe } from "@/lib/parser/plaintext";
-import { buildRecipeFromScraped } from "@/lib/db/recipes";
-import { saveRecipe } from "@/lib/db/recipes";
+import { buildRecipeFromScraped, findDuplicateRecipe, saveRecipe } from "@/lib/db/recipes";
 import { cn } from "@/lib/utils";
 
-export function UrlImporter() {
+export function UrlImporter({ sharedUrl }: { sharedUrl?: string | null }) {
   const router = useRouter();
+  const autoImportedRef = React.useRef(false);
   const [url, setUrl] = React.useState("");
   const [pastedText, setPastedText] = React.useState("");
   const [loading, setLoading] = React.useState(false);
@@ -26,30 +26,50 @@ export function UrlImporter() {
   const [selectedTags, setSelectedTags] = React.useState<string[]>([]);
   const [saving, setSaving] = React.useState(false);
 
-  async function handleImportUrl(e: React.FormEvent) {
-    e.preventDefault();
-    if (!url.trim()) return;
+  const importUrl = React.useCallback(async (target: string) => {
+    if (!target.trim()) return;
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      toast.error(
+        "Importing needs a connection — it fetches the recipe page. Your saved recipes still work offline.",
+      );
+      return;
+    }
     setLoading(true);
     setPreview(null);
     try {
       const res = await fetch("/api/scrape", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: url.trim() }),
+        body: JSON.stringify({ url: target.trim() }),
       });
       const data = await res.json();
       if (!res.ok) {
         toast.error(data.error ?? "Couldn't import that recipe.");
         return;
       }
-      setPreview(data.recipe as ScrapedRecipe);
-      setSelectedTags((data.recipe as ScrapedRecipe).tags.filter((t: string) => RECIPE_TAGS.includes(t as never)));
+      const scraped = data.recipe as ScrapedRecipe;
+      setPreview(scraped);
+      setSelectedTags(scraped.tags.filter((t: string) => RECIPE_TAGS.includes(t as never)));
       toast.success("Recipe imported — review it below before saving.");
     } catch {
       toast.error("Network error while importing. Check the URL and try again.");
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  // Handles the PWA share target: sharing a page into RecipeVault lands here
+  // with the URL in the query string, so we import it automatically.
+  React.useEffect(() => {
+    if (!sharedUrl || autoImportedRef.current) return;
+    autoImportedRef.current = true;
+    setUrl(sharedUrl);
+    importUrl(sharedUrl);
+  }, [sharedUrl, importUrl]);
+
+  async function handleImportUrl(e: React.FormEvent) {
+    e.preventDefault();
+    await importUrl(url);
   }
 
   function handleParseText() {
@@ -64,6 +84,21 @@ export function UrlImporter() {
     if (!preview) return;
     setSaving(true);
     try {
+      const duplicate = await findDuplicateRecipe({
+        sourceUrl: preview.sourceUrl || null,
+        title: preview.title,
+      });
+      if (duplicate) {
+        const proceed = confirm(
+          `"${duplicate.title}" is already in your vault.\n\nClick OK to save a second copy, or Cancel to open the existing recipe.`,
+        );
+        if (!proceed) {
+          setPreview(null);
+          router.push(`/recipes/${duplicate.id}`);
+          return;
+        }
+      }
+
       const recipe = buildRecipeFromScraped(preview, selectedTags);
       await saveRecipe(recipe);
       toast.success(`Saved "${recipe.title}" to your vault.`);

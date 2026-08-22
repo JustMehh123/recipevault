@@ -6,11 +6,11 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { toast } from "sonner";
 import { X, GripVertical, Search } from "lucide-react";
 import { getDb } from "@/lib/db/client";
-import { addMealPlanEntry, moveMealPlanEntry, removeMealPlanEntry } from "@/lib/db/mealPlan";
+import { addMealPlanEntry, clearDay, moveMealPlanEntry, removeMealPlanEntry } from "@/lib/db/mealPlan";
 import type { MealPlanEntry, MealType, Recipe, DayIndex } from "@/types";
 import { DAY_NAMES, MEAL_TYPES } from "@/types";
 import { Input } from "@/components/ui/input";
-import { cn, addDays, formatShortDate } from "@/lib/utils";
+import { cn, addDays, formatShortDate, toIsoDate } from "@/lib/utils";
 
 interface DragPayload {
   type: "new" | "move";
@@ -37,6 +37,12 @@ export function WeeklyGrid({ weekStart }: { weekStart: string }) {
 
   const [search, setSearch] = React.useState("");
   const [dragOverKey, setDragOverKey] = React.useState<string | null>(null);
+  const todayIso = React.useMemo(() => toIsoDate(new Date()), []);
+
+  async function handleClearDay(day: DayIndex, dayName: string) {
+    const removed = await clearDay(weekStart, day);
+    if (removed > 0) toast.success(`Cleared ${dayName}.`);
+  }
 
   const recipeMap = React.useMemo(() => {
     const map = new Map<string, Recipe>();
@@ -89,16 +95,36 @@ export function WeeklyGrid({ weekStart }: { weekStart: string }) {
   }
 
   return (
-    <div className="flex flex-col gap-6 lg:flex-row">
+    <div className="hidden flex-col gap-6 md:flex lg:flex-row">
       <div className="order-2 flex-1 overflow-x-auto lg:order-1">
         <div className="grid min-w-[900px] grid-cols-[100px_repeat(7,1fr)] gap-2">
           <div />
-          {DAY_NAMES.map((day, i) => (
-            <div key={day} className="px-1 text-center">
-              <p className="text-sm font-semibold">{day}</p>
-              <p className="text-xs text-[var(--muted-foreground)]">{formatShortDate(addDays(weekStart, i))}</p>
-            </div>
-          ))}
+          {DAY_NAMES.map((day, i) => {
+            const date = addDays(weekStart, i);
+            const isToday = date === todayIso;
+            const dayCount = (entries ?? []).filter((e) => e.day === i).length;
+            return (
+              <div
+                key={day}
+                className={cn(
+                  "group/day rounded-lg px-1 py-1 text-center",
+                  isToday && "bg-[var(--muted)]",
+                )}
+              >
+                <p className={cn("text-sm font-semibold", isToday && "text-[var(--primary)]")}>{day}</p>
+                <p className="text-xs text-[var(--muted-foreground)]">{formatShortDate(date)}</p>
+                {dayCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => handleClearDay(i as DayIndex, day)}
+                    className="mt-0.5 text-[10px] text-[var(--muted-foreground)] opacity-0 transition-opacity hover:text-red-500 group-hover/day:opacity-100"
+                  >
+                    clear {dayCount}
+                  </button>
+                )}
+              </div>
+            );
+          })}
 
           {MEAL_TYPES.map((mealType) => (
             <React.Fragment key={mealType}>
@@ -141,10 +167,15 @@ export function WeeklyGrid({ weekStart }: { weekStart: string }) {
                           <GripVertical className="h-3 w-3 shrink-0 cursor-grab text-[var(--muted-foreground)]" />
                           <Link
                             href={recipe ? `/recipes/${recipe.id}` : "#"}
-                            className="flex-1 truncate font-medium hover:underline"
-                            title={recipe?.title}
+                            className="min-w-0 flex-1 hover:underline"
+                            title={`${recipe?.title ?? "Deleted recipe"} · ${entry.servings} servings`}
                           >
-                            {recipe?.title ?? "Deleted recipe"}
+                            <span className="block truncate font-medium">
+                              {recipe?.title ?? "Deleted recipe"}
+                            </span>
+                            <span className="block text-[10px] text-[var(--muted-foreground)]">
+                              {entry.servings} servings
+                            </span>
                           </Link>
                           <button
                             type="button"

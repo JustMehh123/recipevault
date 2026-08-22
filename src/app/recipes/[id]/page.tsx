@@ -20,6 +20,7 @@ import {
   Globe,
   Printer,
   Share2,
+  Copy,
 } from "lucide-react";
 import { getDb } from "@/lib/db/client";
 import { toggleFavorite } from "@/lib/db/recipes";
@@ -30,8 +31,14 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CookModeModal } from "@/components/cook-mode-modal";
-import { scaleIngredients, displayIngredient } from "@/lib/parser/ingredients";
-import { formatMinutes, getWeekStart } from "@/lib/utils";
+import { scaleIngredients, displayIngredient, scaleTextQuantities } from "@/lib/parser/ingredients";
+import {
+  convertIngredients,
+  hasConvertibleUnits,
+  UNIT_SYSTEM_LABELS,
+  type UnitSystem,
+} from "@/lib/parser/units";
+import { cn, formatMinutes, getWeekStart } from "@/lib/utils";
 import { DAY_NAMES, MEAL_TYPES, type DayIndex, type MealType } from "@/types";
 
 export default function RecipeDetailPage() {
@@ -46,6 +53,7 @@ export default function RecipeDetailPage() {
 
   const [servings, setServings] = React.useState<number | null>(null);
   const [checked, setChecked] = React.useState<Set<string>>(new Set());
+  const [unitSystem, setUnitSystem] = React.useState<UnitSystem>("original");
   const [cookModeOpen, setCookModeOpen] = React.useState(false);
   const [planOpen, setPlanOpen] = React.useState(false);
   const [planDay, setPlanDay] = React.useState<DayIndex>(0);
@@ -73,7 +81,12 @@ export default function RecipeDetailPage() {
 
   const effectiveServings = servings ?? recipe.servings;
   const factor = recipe.servings > 0 ? effectiveServings / recipe.servings : 1;
-  const scaledIngredients = scaleIngredients(recipe.ingredients, factor);
+  const scaledIngredients = convertIngredients(
+    scaleIngredients(recipe.ingredients, factor),
+    unitSystem,
+  );
+  const canConvert = hasConvertibleUnits(recipe.ingredients);
+  const scaledInstructions = recipe.instructions.map((step) => scaleTextQuantities(step, factor));
 
   async function handleAddToPlan() {
     await addMealPlanEntry({
@@ -85,6 +98,16 @@ export default function RecipeDetailPage() {
     });
     toast.success(`Added "${recipe!.title}" to this week's ${planMeal} on ${DAY_NAMES[planDay]}.`);
     setPlanOpen(false);
+  }
+
+  async function handleCopyIngredients() {
+    const text = scaledIngredients.map((ing) => `• ${displayIngredient(ing)}`).join("\n");
+    try {
+      await navigator.clipboard.writeText(`${recipe!.title} — ${effectiveServings} servings\n\n${text}`);
+      toast.success("Ingredients copied to the clipboard.");
+    } catch {
+      toast.error("Couldn't copy the ingredient list.");
+    }
   }
 
   async function handleShare() {
@@ -197,6 +220,7 @@ export default function RecipeDetailPage() {
             <div className="flex items-center gap-2 rounded-lg bg-[var(--muted)] px-2 py-1">
               <button
                 type="button"
+                aria-label="Decrease servings"
                 onClick={() => setServings((s) => Math.max(1, (s ?? recipe.servings) - 1))}
                 className="rounded-md p-1 hover:bg-[var(--card)]"
               >
@@ -205,6 +229,7 @@ export default function RecipeDetailPage() {
               <span className="w-6 text-center text-sm font-medium">{effectiveServings}</span>
               <button
                 type="button"
+                aria-label="Increase servings"
                 onClick={() => setServings((s) => (s ?? recipe.servings) + 1)}
                 className="rounded-md p-1 hover:bg-[var(--card)]"
               >
@@ -212,6 +237,67 @@ export default function RecipeDetailPage() {
               </button>
             </div>
           </div>
+
+          <div className="no-print mb-3 flex flex-wrap items-center gap-1.5">
+            {[0.5, 1, 2, 3].map((multiplier) => {
+              const target = Math.max(1, Math.round(recipe.servings * multiplier));
+              const active = effectiveServings === target;
+              return (
+                <button
+                  key={multiplier}
+                  type="button"
+                  onClick={() => setServings(target)}
+                  aria-pressed={active}
+                  className={cn(
+                    "rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
+                    active
+                      ? "border-transparent bg-[var(--primary)] text-[var(--primary-foreground)]"
+                      : "border-[var(--border)] text-[var(--muted-foreground)] hover:bg-[var(--muted)]",
+                  )}
+                >
+                  {multiplier === 0.5 ? "½×" : `${multiplier}×`}
+                </button>
+              );
+            })}
+            {effectiveServings !== recipe.servings && (
+              <button
+                type="button"
+                onClick={() => setServings(recipe.servings)}
+                className="ml-1 text-xs text-[var(--primary)] underline underline-offset-2"
+              >
+                Reset to {recipe.servings}
+              </button>
+            )}
+          </div>
+
+          {canConvert && (
+            <div className="no-print mb-3 flex items-center gap-1 rounded-lg bg-[var(--muted)] p-1">
+              {(Object.keys(UNIT_SYSTEM_LABELS) as UnitSystem[]).map((system) => (
+                <button
+                  key={system}
+                  type="button"
+                  onClick={() => setUnitSystem(system)}
+                  aria-pressed={unitSystem === system}
+                  className={cn(
+                    "flex-1 rounded-md px-2 py-1 text-xs font-medium transition-colors",
+                    unitSystem === system
+                      ? "bg-[var(--card)] text-[var(--foreground)] shadow-sm"
+                      : "text-[var(--muted-foreground)] hover:text-[var(--foreground)]",
+                  )}
+                >
+                  {UNIT_SYSTEM_LABELS[system]}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {effectiveServings !== recipe.servings && (
+            <p className="mb-2 rounded-lg bg-[var(--muted)]/60 px-2.5 py-1.5 text-xs text-[var(--muted-foreground)]">
+              Scaled from {recipe.servings} to {effectiveServings} servings — amounts in the text
+              (like grams and millilitres) are converted too.
+            </p>
+          )}
+
           <ul className="flex flex-col gap-1">
             {scaledIngredients.map((ingredient) => {
               const isChecked = checked.has(ingredient.id);
@@ -240,12 +326,31 @@ export default function RecipeDetailPage() {
               );
             })}
           </ul>
+
+          <div className="no-print mt-3 flex flex-wrap items-center gap-3 text-xs">
+            <button
+              type="button"
+              onClick={handleCopyIngredients}
+              className="flex items-center gap-1 text-[var(--primary)] hover:underline"
+            >
+              <Copy className="h-3.5 w-3.5" /> Copy list
+            </button>
+            {checked.size > 0 && (
+              <button
+                type="button"
+                onClick={() => setChecked(new Set())}
+                className="text-[var(--muted-foreground)] underline underline-offset-2"
+              >
+                Uncheck all ({checked.size})
+              </button>
+            )}
+          </div>
         </section>
 
         <section className="lg:col-span-2">
           <h2 className="mb-3 text-lg font-semibold">Instructions</h2>
           <ol className="flex flex-col gap-4">
-            {recipe.instructions.map((step, i) => (
+            {scaledInstructions.map((step, i) => (
               <li key={i} className="flex gap-3">
                 <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--muted)] text-sm font-semibold">
                   {i + 1}

@@ -45,6 +45,17 @@ export default function manifest(): MetadataRoute.Manifest {
         type: "image/png",
       },
     ],
+    // Lets you hit "Share" on a recipe page in the browser and send it
+    // straight into RecipeVault's importer.
+    share_target: {
+      action: "/recipes",
+      method: "GET",
+      params: {
+        title: "title",
+        text: "text",
+        url: "url",
+      },
+    },
     shortcuts: [
       {
         name: "Recipes",

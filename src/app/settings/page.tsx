@@ -21,6 +21,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { clearAllData, downloadBackupFile, exportBackup, importBackup } from "@/lib/db/backup";
 import { InstallAppCard } from "@/components/install-app-card";
 import { AddressForm } from "@/components/address-form";
+import { PantrySettings } from "@/components/pantry-settings";
+import { OfflineReadiness } from "@/components/offline-readiness";
 
 export default function SettingsPage() {
   const fileInputRef = React.useRef<HTMLInputElement>(null);
@@ -135,6 +137,10 @@ export default function SettingsPage() {
           <AddressForm current={savedAddress ?? null} />
         </CardContent>
       </Card>
+
+      <PantrySettings />
+
+      <OfflineReadiness />
 
       <InstallAppCard />
 
